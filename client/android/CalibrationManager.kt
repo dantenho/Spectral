@@ -15,6 +15,7 @@ import android.hardware.SensorManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 // ============================================================================
@@ -283,9 +284,9 @@ class CalibrationManager(
         val rangeZ = magMaxZ - magMinZ
         val avgRange = (rangeX + rangeY + rangeZ) / 3f
 
-        val scaleX = if (rangeX > 0) avgRange / rangeX else 1f
-        val scaleY = if (rangeY > 0) avgRange / rangeY else 1f
-        val scaleZ = if (rangeZ > 0) avgRange / rangeZ else 1f
+        val scaleX = if (abs(rangeX) > 1e-6) avgRange / rangeX else 1f
+        val scaleY = if (abs(rangeY) > 1e-6) avgRange / rangeY else 1f
+        val scaleZ = if (abs(rangeZ) > 1e-6) avgRange / rangeZ else 1f
 
         val calibration = CalibrationData(
             offsetX = offsetX,
