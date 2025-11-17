@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # InfluxDB - Time Series Database
+  influxdb:
+    image: influxdb:2.7
+    container_name: spectral_influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin_password
+      - DOCKER_INFLUXDB_INIT_ORG=spectral
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensors
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=spectral_influx_token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    networks:
+      - spectral_network
+    restart: unless-stopped
+
+  # PostgreSQL - Relational Database
+  postgres:
+    image: postgres:16
+    container_name: spectral_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=spectral
+      - POSTGRES_PASSWORD=spectral_password
+      - POSTGRES_DB=spectral
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - spectral_network
+    restart: unless-stopped
+
+  # Spectral Backend Server
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: spectral_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=spectral_influx_token
+      - INFLUXDB_ORG=spectral
+      - INFLUXDB_BUCKET=sensors
+      - POSTGRES_URL=postgresql://spectral:spectral_password@postgres:5432/spectral
+    volumes:
+      - ./server:/app
+      - ./data:/data
+      - ./models:/models
+    depends_on:
+      - influxdb
+      - postgres
+    networks:
+      - spectral_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Gradio Interface
+  interface:
+    build:
+      context: ./interface
+      dockerfile: Dockerfile
+    container_name: spectral_interface
+    ports:
+      - "7860:7860"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    volumes:
+      - ./interface:/app
+      - ./data:/data
+    depends_on:
+      - backend
+    networks:
+      - spectral_network
+    restart: unless-stopped
+
+volumes:
+  influxdb_data:
+  influxdb_config:
+  postgres_data:
+
+networks:
+  spectral_network:
+    driver: bridge
